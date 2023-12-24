@@ -1,0 +1,11 @@
+<h1>Tower Defense</h1>
+<canvas #canvas width="500" height="500"></canvas>
+<div>
+  <button
+    [style.color]="selectedTower === CellType.ArcherTower ? 'red' : 'green'"
+    (click)="onSelectTower(CellType.ArcherTower)"
+  >
+    Archer Tower
+    <div style="color: red">{{ selectedTower != null ? "[Cancel]" : "" }}</div>
+  </button>
+</div>
