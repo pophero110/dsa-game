@@ -1,11 +1,18 @@
-<h1>Tower Defense</h1>
-<canvas #canvas width="500" height="500"></canvas>
 <div>
+  <h1>Tower Defense</h1>
+  <button (click)="onStartWave()">Start wave</button>
+</div>
+<canvas #canvas width="500" height="500"></canvas>
+<div style="color: red">{{ errorMessage }}</div>
+<div>
+  <button (click)="onSelectArcherTower()">Archer Tower</button>
+
   <button
-    [style.color]="selectedTower === CellType.ArcherTower ? 'red' : 'green'"
-    (click)="onSelectTower(CellType.ArcherTower)"
+    *ngIf="gameBoard.towerPlacementMode"
+    style="color: red"
+    (click)="onCancelSelectTower()"
   >
-    Archer Tower
-    <div style="color: red">{{ selectedTower != null ? "[Cancel]" : "" }}</div>
+    Cancel
   </button>
 </div>
+<canvas #testCanvas width="500" height="500"></canvas>

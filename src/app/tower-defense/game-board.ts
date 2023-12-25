@@ -1,12 +1,21 @@
 export default class GameBoard {
   gridSize = 10;
-  cellSize = 50;
-  hoveredTowerPlacement: { row: number; col: number } | null = null;
-  spawnPoint: { row: number; col: number } = { row: 0, col: 0 };
-  exitPoint: { row: number; col: number } = { row: 9, col: 9 };
-  cells: Array<Array<{ row: number; col: number; type: CellType }>> = [];
+  grid: Array<Array<Cell>> = [];
   context!: CanvasRenderingContext2D;
   monsterWave: Array<Monster> = [];
+  monsterWayPoints = [
+    { x: 465, y: 15 },
+    { x: 465, y: 115 },
+    { x: 15, y: 215 },
+    { x: 465, y: 215 },
+    { x: 465, y: 315 },
+    { x: 15, y: 315 },
+    { x: 15, y: 415 },
+    { x: 465, y: 415 },
+    { x: 465, y: 455 },
+  ];
+  archerTowers: Array<ArcherTowerCell> = [];
+  towerPlacementMode: boolean = false;
 
   constructor(context: CanvasRenderingContext2D | null) {
     if (context) {
@@ -16,90 +25,104 @@ export default class GameBoard {
   }
 
   render(): void {
+    const archerTowerCells: Array<ArcherTowerCell> = [];
     for (let row = 0; row < this.gridSize; row++) {
       for (let col = 0; col < this.gridSize; col++) {
-        this.drawCell(col, row, this.cells[row][col].type);
+        const cell = this.grid[row][col];
+        if (cell instanceof ArcherTowerCell) {
+          archerTowerCells.push(cell);
+        } else {
+          cell.draw(this.context);
+        }
       }
+    }
+    // Draw ArcherTowerCell instances at the end
+    for (const archerTowerCell of archerTowerCells) {
+      archerTowerCell.draw(this.context);
     }
   }
 
   initializeGrid(): void {
     for (let row = 0; row < this.gridSize; row++) {
-      this.cells[row] = [];
+      this.grid[row] = [];
       for (let col = 0; col < this.gridSize; col++) {
-        this.cells[row][col] = { row, col, type: CellType.Empty };
+        this.grid[row][col] = new EmtpyCell(row, col);
         if (row % 2 == 0) {
-          this.cells[row][col].type = CellType.Path;
+          this.grid[row][col] = new PathCell(row, col);
         }
       }
     }
     // Set path cell that connect path cell row
-    this.cells[1][this.gridSize - 1].type = CellType.Path;
-    this.cells[3][0].type = CellType.Path;
-    this.cells[5][this.gridSize - 1].type = CellType.Path;
-    this.cells[7][0].type = CellType.Path;
+    this.grid[1][this.gridSize - 1] = new PathCell(1, this.gridSize - 1);
+    this.grid[3][0] = new PathCell(3, 0);
+    this.grid[5][this.gridSize - 1] = new PathCell(5, this.gridSize - 1);
+    this.grid[7][0] = new PathCell(7, 0);
     // Set starting point
-    this.cells[this.spawnPoint.row][this.spawnPoint.col].type = CellType.Start;
+    this.grid[0][0] = new StartPointCell(0, 0);
     // Set exit point
-    this.cells[this.exitPoint.row][this.exitPoint.col].type = CellType.Exit;
+    this.grid[9][9] = new ExitPointCell(9, 9);
   }
 
-  drawCell(col: number, row: number, type: CellType): void {
-    switch (type) {
-      case CellType.Start:
-        this.context.fillStyle = 'black';
-        break;
-      case CellType.Exit:
-        this.context.fillStyle = 'blue';
-        break;
-      case CellType.Path:
-        this.context.fillStyle = 'gray';
-        break;
-      case CellType.ArcherTower:
-        this.context.fillStyle = 'green';
-        break;
-      default:
-        this.context.fillStyle = 'white';
-    }
-
-    this.context.fillRect(
-      col * this.cellSize,
-      row * this.cellSize,
-      this.cellSize,
-      this.cellSize
-    );
+  setCell(cell: Cell) {
+    this.grid[cell.row][cell.col] = cell;
   }
 
-  placeTower(row: number, col: number, selectedTower: CellType) {
-    this.cells[row][col] = { row, col, type: selectedTower };
-    this.drawCell(col, row, selectedTower);
+  startWave() {
+    this.spawnMonster();
+    setInterval(() => {
+      this.spawnMonster();
+    }, 2000);
   }
 
-  spawnMonsterWave() {
-    const numberOfMonster = 1;
-    for (let i = 0; i < numberOfMonster; i++) {
-      let monster = new Monster(15, 15);
-      this.monsterWave.push(monster);
-      this.drawMonster(monster);
-    }
+  spawnMonster() {
+    this.monsterWave.push(new Monster(15, 15));
   }
 
-  drawMonster(monster: Monster) {
-    this.context.fillStyle = 'red';
-    this.context.fillRect(
-      monster.position.x,
-      monster.position.y,
-      monster.cellSize,
-      monster.cellSize
-    );
+  isEmtpyCell(row: number, col: number): boolean {
+    return this.grid[row][col] instanceof EmtpyCell;
   }
 }
 
 class Monster {
   cellSize = 20;
-  position!: { x: number; y: number };
+  position: { x: number; y: number };
+  health = 40;
+  currentPathIndex: number = 0;
+  currentWaypointIndex: number = 0;
   constructor(x: number, y: number) {
     this.position = { x, y };
+  }
+
+  draw(context: CanvasRenderingContext2D): void {
+    const healthBarHeight = 4;
+    const healthBarWidth = this.cellSize;
+    const healthBarY = this.position.y - healthBarHeight - 2; // Adjust the vertical position of the health bar
+
+    // Draw the monster
+    context.fillStyle = 'brown';
+    context.fillRect(
+      this.position.x,
+      this.position.y,
+      this.cellSize,
+      this.cellSize
+    );
+
+    // Draw the health bar
+    const healthPercentage = Math.max(0, this.health) / 40; // Ensure the percentage is between 0 and 1
+    const healthBarColor = this.getHealthBarColor(healthPercentage);
+    context.fillStyle = healthBarColor;
+    context.fillRect(
+      this.position.x,
+      healthBarY,
+      healthBarWidth * healthPercentage,
+      healthBarHeight
+    );
+  }
+
+  // Helper function to get health bar color based on percentage
+  getHealthBarColor(percentage: number): string {
+    const hue = percentage * 120; // 0% health is green, 100% health is red
+    return `hsl(${hue}, 100%, 50%)`;
   }
 }
 
@@ -109,4 +132,153 @@ export enum CellType {
   Exit = 'exit',
   Path = 'path',
   ArcherTower = 'archer-tower',
+}
+
+export const CELL_SIZE = 50;
+export class Cell {
+  row: number;
+  col: number;
+  x: number;
+  y: number;
+  type: CellType;
+  cellSize: number = CELL_SIZE;
+  isHovered: boolean = false;
+  constructor(row: number, col: number, type: CellType) {
+    this.row = row;
+    this.col = col;
+    this.type = type;
+    this.x = this.col * CELL_SIZE;
+    this.y = this.row * CELL_SIZE;
+  }
+  updatePosition(): void {}
+
+  draw(context: CanvasRenderingContext2D): void {
+    context.fillRect(this.x, this.y, this.cellSize, this.cellSize);
+  }
+}
+
+export class EmtpyCell extends Cell {
+  constructor(row: number, col: number) {
+    super(row, col, CellType.Empty);
+  }
+
+  override draw(context: CanvasRenderingContext2D): void {
+    context.fillStyle = 'white';
+    super.draw(context);
+  }
+}
+export class ArcherTowerCell extends Cell {
+  override cellSize: number = 20;
+  override x = this.col * CELL_SIZE + 15;
+  override y = this.row * CELL_SIZE + 15;
+  attackRange: number = 70;
+  attackPower: number = 10;
+  constructor(row: number = 0, col: number = 0) {
+    super(row, col, CellType.ArcherTower);
+  }
+
+  override draw(context: CanvasRenderingContext2D): void {
+    context.fillStyle = 'green';
+    super.draw(context);
+
+    // Draw the attack range circle
+    context.beginPath();
+    context.strokeStyle = 'lightblue';
+    context.arc(
+      this.x + this.cellSize / 2,
+      this.y + this.cellSize / 2,
+      this.attackRange,
+      0,
+      2 * Math.PI
+    );
+    context.stroke();
+  }
+
+  override updatePosition(): void {
+    this.x = this.col * CELL_SIZE + 15;
+    this.y = this.row * CELL_SIZE + 15;
+  }
+}
+
+class PathCell extends Cell {
+  constructor(row: number, col: number) {
+    super(row, col, CellType.Path);
+  }
+
+  override draw(context: CanvasRenderingContext2D): void {
+    context.fillStyle = 'gray';
+    super.draw(context);
+  }
+}
+
+class StartPointCell extends Cell {
+  constructor(row: number, col: number) {
+    super(row, col, CellType.Start);
+  }
+
+  override draw(context: CanvasRenderingContext2D): void {
+    context.fillStyle = 'black';
+    super.draw(context);
+  }
+}
+
+class ExitPointCell extends Cell {
+  constructor(row: number, col: number) {
+    super(row, col, CellType.Exit);
+  }
+
+  override draw(context: CanvasRenderingContext2D): void {
+    context.fillStyle = 'blue';
+    super.draw(context);
+  }
+}
+
+export class Arrow {
+  x: number;
+  y: number;
+  target: Monster;
+  speed: number;
+  damage: number;
+
+  constructor(
+    x: number,
+    y: number,
+    target: Monster,
+    speed: number,
+    damage: number
+  ) {
+    this.x = x;
+    this.y = y;
+    this.target = target;
+    this.speed = speed;
+    this.damage = damage;
+  }
+
+  update(): void {
+    // Move the arrow towards the target
+    const dx = this.target.position.x - this.x;
+    const dy = this.target.position.y - this.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Normalize the direction vector
+    const directionX = dx / distance;
+    const directionY = dy / distance;
+
+    // Move the arrow based on its speed
+    this.x += directionX * this.speed;
+    this.y += directionY * this.speed;
+  }
+
+  draw(context: CanvasRenderingContext2D): void {
+    // Draw the arrow as a circle
+    context.beginPath();
+    context.fillStyle = 'black';
+
+    // The circle is drawn centered around this.x, this.y
+    const circleRadius = 5; // Adjust the circle radius as needed
+
+    context.arc(this.x, this.y, circleRadius, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+  }
 }
