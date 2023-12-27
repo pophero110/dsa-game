@@ -1,18 +1,24 @@
-<div>
+<main style="width: 500px">
   <h1>Tower Defense</h1>
-  <button (click)="onStartWave()">Start wave</button>
-</div>
-<canvas #canvas width="500" height="500"></canvas>
-<div style="color: red">{{ errorMessage }}</div>
-<div>
-  <button (click)="onSelectArcherTower()">Archer Tower</button>
-
-  <button
-    *ngIf="gameBoard.towerPlacementMode"
-    style="color: red"
-    (click)="onCancelSelectTower()"
+  <div
+    style="display: flex; justify-content: space-between; margin-bottom: 8px"
   >
-    Cancel
-  </button>
-</div>
-<canvas #testCanvas width="500" height="500"></canvas>
+    <button (click)="onStartGame()">Start Game</button>
+    <p>
+      Monsters: {{ gameBoard.monsterWaves[gameBoard.currentMonsterWaveIndex] }}
+    </p>
+    <p>Available: ${{ availableMoney }}</p>
+  </div>
+  <canvas #canvas width="500" height="500"></canvas>
+  <div style="color: red">{{ errorMessage }}</div>
+  <div>
+    <button (click)="onSelectArcherTower()">Archer Tower: $10</button>
+    <button
+      *ngIf="gameBoard.towerPlacementMode"
+      style="color: red"
+      (click)="onCancelSelectTower()"
+    >
+      Cancel
+    </button>
+  </div>
+</main>

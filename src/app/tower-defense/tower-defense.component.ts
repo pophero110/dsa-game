@@ -19,30 +19,17 @@ export class TowerDefenseComponent {
   @ViewChild('canvas', { static: true })
   canvas!: ElementRef<HTMLCanvasElement>;
 
-  @ViewChild('testCanvas', { static: true })
-  testCanvas!: ElementRef<HTMLCanvasElement>;
-
   context!: CanvasRenderingContext2D;
   gameBoard!: GameBoard;
+  gameState: string = 'not started';
+  availableMoney: number = 20;
   activeArrows: Array<Arrow> = [];
 
   CellType = CellType;
   hoveredCell: Cell | null = null;
   errorMessage: string = '';
 
-  drawTestCanvas(): void {
-    const context = this.testCanvas.nativeElement.getContext('2d');
-    if (context) {
-      // Draw the attack range circle
-      context.beginPath();
-      context.strokeStyle = 'red';
-      context.lineWidth = 2;
-      context.arc(50 + 50 / 2, 50 + 50 / 2, 60, 0, 2 * Math.PI);
-      context.stroke();
-    }
-  }
   ngOnInit(): void {
-    this.drawTestCanvas();
     // Initialize game
     const context = this.canvas.nativeElement.getContext('2d');
     if (context) {
@@ -53,21 +40,16 @@ export class TowerDefenseComponent {
     // Update & Render game
     const gameLoop = (timeStamp: number) => {
       const elapsedTime = timeStamp - lastTimeStamp;
-
       this.clearCanvas();
       this.gameBoard.render();
-      this.updateMonsterWave();
-
+      this.updateActiveMonsters();
       // Update per second
       if (elapsedTime > 1000) {
-        console.log({
-          elapsedSecond: Math.floor(timeStamp / 1000),
-        });
+        this.updateMonsterWaves();
         this.updateArcherTower();
         lastTimeStamp = timeStamp;
       }
       this.updateArrows();
-
       window.requestAnimationFrame(gameLoop);
     };
     window.requestAnimationFrame(gameLoop);
@@ -84,52 +66,72 @@ export class TowerDefenseComponent {
     );
   }
 
-  updateMonsterWave(): void {
-    const speed = 1;
-    this.gameBoard.monsterWave.forEach((monster) => {
+  updateMonsterWaves(): void {
+    if (
+      this.gameBoard.activeMonsters.length === 0 &&
+      this.gameState == 'started'
+    ) {
+      this.gameBoard.currentMonsterWaveIndex++;
+      this.gameBoard.difficulty++;
+      if (
+        this.gameBoard.currentMonsterWaveIndex >=
+        this.gameBoard.monsterWaves.length
+      ) {
+        this.gameState = 'finished';
+        console.log('Game finished');
+        return;
+      }
+      this.gameBoard.startWave();
+    }
+  }
+
+  updateActiveMonsters(): void {
+    this.gameBoard.activeMonsters.forEach((monster) => {
       if (
         monster.currentWaypointIndex < this.gameBoard.monsterWayPoints.length
       ) {
         const targetWaypoint =
           this.gameBoard.monsterWayPoints[monster.currentWaypointIndex];
-        const xDistance = targetWaypoint.x - monster.position.x;
-        const yDistance = targetWaypoint.y - monster.position.y;
+        let xDistance = Math.floor(targetWaypoint.x - monster.position.x);
+        let yDistance = Math.floor(targetWaypoint.y - monster.position.y);
+        if (xDistance === -1 || xDistance === 1) xDistance = 0;
+        if (yDistance === -1 || yDistance === 1) yDistance = 0;
         // Move towards the target waypoint
         if (xDistance !== 0) {
           if (xDistance > 0) {
-            monster.position.x += speed;
+            monster.position.x += monster.movementSpeed;
           } else {
-            monster.position.x -= speed;
+            monster.position.x -= monster.movementSpeed;
           }
         } else if (yDistance !== 0) {
           if (yDistance > 0) {
-            monster.position.y += speed;
+            monster.position.y += monster.movementSpeed;
           } else {
-            monster.position.y -= speed;
+            monster.position.y -= monster.movementSpeed;
           }
         } else {
           // Reached the target waypoint, move to the next one
           monster.currentWaypointIndex++;
-          console.log(
-            "Update monster's current waypoint",
-            monster.currentWaypointIndex,
-            this.gameBoard.monsterWayPoints[monster.currentWaypointIndex]
-          );
         }
         monster.draw(this.context);
       }
     });
-    this.gameBoard.monsterWave = this.gameBoard.monsterWave.filter(
-      (monster) => monster.health > 0
+    this.gameBoard.activeMonsters = this.gameBoard.activeMonsters.filter(
+      (monster) => {
+        if (monster.currentHealth > 0) {
+          return true;
+        } else {
+          this.availableMoney += 5;
+          console.log('Positive Feadback: Gain Coins');
+          return false;
+        }
+      }
     );
   }
 
   updateArcherTower(): void {
-    if (this.gameBoard.archerTowers.length > 0) {
-      console.log('Archer Tower Attacked', this.gameBoard.archerTowers);
-    }
     this.gameBoard.archerTowers.forEach((archerTower) => {
-      for (let monster of this.gameBoard.monsterWave) {
+      for (let monster of this.gameBoard.activeMonsters) {
         const distance = Math.sqrt(
           Math.pow(monster.position.x - archerTower.x, 2) +
             Math.pow(monster.position.y - archerTower.y, 2)
@@ -146,7 +148,7 @@ export class TowerDefenseComponent {
 
           // Add the arrow to a list of active arrows
           this.activeArrows.push(arrow);
-          monster.health -= archerTower.attackPower;
+          monster.currentHealth -= archerTower.attackPower;
           break;
         }
       }
@@ -221,18 +223,27 @@ export class TowerDefenseComponent {
       if (this.hoveredCell instanceof ArcherTowerCell) {
         this.gameBoard.setCell(this.hoveredCell);
         this.gameBoard.archerTowers.push(this.hoveredCell);
+        this.availableMoney -= this.hoveredCell.initialMoneyCost;
         this.hoveredCell = null;
         this.gameBoard.towerPlacementMode = false;
       }
     } else {
-      this.errorMessage = 'Please select a tower below';
-      setTimeout(() => {
-        this.errorMessage = '';
-      }, 3000);
+      this.updateErrorMessage('Please select a tower below');
     }
   }
 
+  updateErrorMessage(message: string) {
+    this.errorMessage = message;
+    setTimeout(() => {
+      this.errorMessage = '';
+    }, 3000);
+  }
+
   onSelectArcherTower(): void {
+    if (this.availableMoney < 10) {
+      this.updateErrorMessage('Not enough money');
+      return;
+    }
     this.gameBoard.towerPlacementMode = true;
     this.hoveredCell = new ArcherTowerCell();
   }
@@ -242,7 +253,8 @@ export class TowerDefenseComponent {
     this.hoveredCell = null;
   }
 
-  onStartWave(): void {
+  onStartGame(): void {
+    this.gameState = 'started';
     this.gameBoard.startWave();
   }
 

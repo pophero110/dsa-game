@@ -2,7 +2,11 @@ export default class GameBoard {
   gridSize = 10;
   grid: Array<Array<Cell>> = [];
   context!: CanvasRenderingContext2D;
-  monsterWave: Array<Monster> = [];
+  monsterWaves: Array<number> = [5, 10, 15];
+  currentMonsterWaveIndex: number = 0;
+  difficulty: number = 0;
+  activeMonsters: Array<Monster> = [];
+  monsterSpawnCellPosition: { x: number; y: number } = { x: 15, y: 15 };
   monsterWayPoints = [
     { x: 465, y: 15 },
     { x: 465, y: 115 },
@@ -69,13 +73,38 @@ export default class GameBoard {
 
   startWave() {
     this.spawnMonster();
-    setInterval(() => {
-      this.spawnMonster();
+    this.monsterWaves[this.currentMonsterWaveIndex]--;
+    const intervalId = setInterval(() => {
+      const monsterCount = this.monsterWaves[this.currentMonsterWaveIndex];
+      if (monsterCount > 0) {
+        this.spawnMonster();
+        this.monsterWaves[this.currentMonsterWaveIndex]--;
+      } else {
+        clearInterval(intervalId); // Stop the interval when all monsters are spawned
+      }
     }, 2000);
   }
 
   spawnMonster() {
-    this.monsterWave.push(new Monster(15, 15));
+    switch (this.difficulty) {
+      case 0:
+        this.activeMonsters.push(
+          new Monster(this.monsterSpawnCellPosition, 40, 1)
+        );
+        break;
+      case 1:
+        this.activeMonsters.push(
+          new Monster(this.monsterSpawnCellPosition, 40, 1.5)
+        );
+        break;
+      case 2:
+        this.activeMonsters.push(
+          new Monster(this.monsterSpawnCellPosition, 60, 1.5)
+        );
+        break;
+      default:
+        throw new Error('Invalid difficulty level');
+    }
   }
 
   isEmtpyCell(row: number, col: number): boolean {
@@ -85,12 +114,20 @@ export default class GameBoard {
 
 class Monster {
   cellSize = 20;
+  movementSpeed;
   position: { x: number; y: number };
-  health = 40;
-  currentPathIndex: number = 0;
+  maxHealth: number;
+  currentHealth: number;
   currentWaypointIndex: number = 0;
-  constructor(x: number, y: number) {
-    this.position = { x, y };
+  constructor(
+    position: { x: number; y: number },
+    maxHealth: number,
+    movementSpeed: number
+  ) {
+    this.position = { ...position };
+    this.maxHealth = maxHealth;
+    this.currentHealth = maxHealth;
+    this.movementSpeed = movementSpeed;
   }
 
   draw(context: CanvasRenderingContext2D): void {
@@ -108,7 +145,7 @@ class Monster {
     );
 
     // Draw the health bar
-    const healthPercentage = Math.max(0, this.health) / 40; // Ensure the percentage is between 0 and 1
+    const healthPercentage = Math.max(0, this.currentHealth) / this.maxHealth; // Ensure the percentage is between 0 and 1
     const healthBarColor = this.getHealthBarColor(healthPercentage);
     context.fillStyle = healthBarColor;
     context.fillRect(
@@ -173,6 +210,7 @@ export class ArcherTowerCell extends Cell {
   override y = this.row * CELL_SIZE + 15;
   attackRange: number = 70;
   attackPower: number = 10;
+  initialMoneyCost: number = 10;
   constructor(row: number = 0, col: number = 0) {
     super(row, col, CellType.ArcherTower);
   }
